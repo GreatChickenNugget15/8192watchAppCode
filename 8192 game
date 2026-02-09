@@ -1,0 +1,415 @@
+import SwiftUI
+
+struct ContentView: View {
+    
+    @State var selectScreen = false
+    @State var menu = true
+    @State var oneTwentyEight = false
+    @State var twoFiftySix = false
+    @State var fiveTwelve = false
+    @State var tenTwentyFour = false
+    @State var twentyFortyEight = false
+    @State var fortyNinetySix = false
+    @State var eightyOneNinetyTwo = false
+    @State var endlessMode = false
+    @State var winScreen = false
+    @State var loseScreen = false
+    
+    // Persistence using AppStorage (Local Storage)
+    @AppStorage("hasActiveGame") var hasActiveGame = false
+    @AppStorage("activeTarget") var activeTarget = 0
+    @AppStorage("savedBoard") var savedBoardString: String = ""
+    @AppStorage("isEndless") var isEndless = false
+    
+    @State var currentScore = 0
+    
+    @State var board = [
+        0, 0, 2, 0,
+        0, 0, 0, 4,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+    ]
+    
+    // Adjusted offsets to shift the grid higher up on the screen
+    @State var gridOffsets: [(x: CGFloat, y: CGFloat)] = [
+        (-65, 30), (-23, 30), (19, 30), (61, 30),
+        (-65, -12), (-23, -12), (19, -12), (61, -12),
+        (-65, -54), (-23, -54), (19, -54), (61, -54),
+        (-65, -96), (-23, -96), (19, -96), (61, -96)
+    ]
+    
+    // Custom dark gray background
+    let darkGray = Color(red: 0.15, green: 0.15, blue: 0.15)
+    
+    var body: some View {
+        ZStack {
+            darkGray.ignoresSafeArea()
+            
+            if menu {
+                VStack(spacing: 20) {
+                    Text("8192 :)")
+                        .font(.largeTitle)
+                        .foregroundColor(.white)
+                        .offset(y: -40)
+                    
+                    Button("Play") {
+                        menu = false
+                        selectScreen = true
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.white)
+                    .offset(y: 20)
+                }
+            }
+            
+            if selectScreen {
+                ScrollView {
+                    VStack {
+                        Button("< Back") {
+                            menu = true
+                            selectScreen = false
+                        }
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding(.top, 10)
+                        .offset(y: -20)
+                        
+                        if hasActiveGame {
+                            Button("Resume") {
+                                resumeGame()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.green)
+                            .font(.title2)
+                            .offset(y: -15)
+                        }
+                        
+                        VStack(spacing: 15) {
+                            Button("128") { startNewGame(target: 128) }.buttonStyle(.borderedProminent).tint(.red).font(.title2)
+                            Button("256") { startNewGame(target: 256) }.buttonStyle(.borderedProminent).tint(.orange).font(.title2)
+                            Button("512") { startNewGame(target: 512) }.buttonStyle(.borderedProminent).tint(.yellow).font(.title2)
+                            Button("1024") { startNewGame(target: 1024) }.buttonStyle(.borderedProminent).tint(.green).font(.title2)
+                            Button("2048") { startNewGame(target: 2048) }.buttonStyle(.borderedProminent).tint(.blue).font(.title2)
+                            Button("4096") { startNewGame(target: 4096) }.buttonStyle(.borderedProminent).tint(.purple).font(.title2)
+                            Button("8192") { startNewGame(target: 8192) }.buttonStyle(.borderedProminent).tint(.pink).font(.title2)
+                            
+                            Button("Endless") { startNewGame(target: 0, endless: true) }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.blue)
+                                .font(.title2)
+                        }
+                        .padding(.top, 10)
+                        .padding(.bottom, 20)
+                        .offset(y: -20)
+                        
+                        Text("Coming Soon!")
+                            .font(.headline)
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding(.bottom, 30)
+                            .offset(y: -25)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            
+            if oneTwentyEight || twoFiftySix || fiveTwelve || tenTwentyFour || twentyFortyEight || fortyNinetySix || eightyOneNinetyTwo || endlessMode {
+                VStack {
+                    // Grid is now positioned higher up
+                    ZStack {
+                        ForEach(0..<16, id: \.self) { i in
+                            let pos = gridOffsets[i]
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(colorForValue(board[i]))
+                                    .frame(width: 35, height: 35)
+                                
+                                if board[i] > 0 {
+                                    Text("\(board[i])")
+                                        .font(.system(size: 15, weight: .bold))
+                                        .foregroundColor((board[i] == 2 || board[i] == 512) ? .black : .white)
+                                }
+                            }
+                            .offset(x: pos.x, y: pos.y)
+                            .offset(y: 25)
+                        }
+                    }
+                    .frame(height: 180)
+                    .contentShape(Rectangle())
+                    .padding(.top, 10) // Prevents hitting the status bar/clock
+                    .gesture(
+                        DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                            .onEnded { value in
+                                handleSwipe(translation: value.translation)
+                                saveBoardToStorage()
+                            }
+                    )
+                    
+                    Spacer()
+                    
+                    // Menu button is now at the bottom
+                    Button("menu") {
+                        saveAndGoToMenu()
+                    }
+                    .controlSize(.mini)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .padding(.bottom, 5)
+                    .offset(y: -12.5)
+                }
+            }
+            
+            if winScreen {
+                VStack {
+                    Text("you win!! :)")
+                        .font(.largeTitle)
+                        .foregroundColor(.white)
+                        .padding()
+                    
+                    Button("Back to Levels") {
+                        hasActiveGame = false
+                        winScreen = false
+                        selectScreen = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                    .offset(y: -20)
+                }
+            }
+            
+            if loseScreen {
+                VStack {
+                    Text("you lost :(")
+                        .font(.largeTitle)
+                        .foregroundColor(.white)
+                        .padding()
+                    
+                    Button("Try Again") {
+                        hasActiveGame = false
+                        loseScreen = false
+                        selectScreen = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+                    .offset(y: -20)
+                }
+            }
+        }
+    }
+    
+    func colorForValue(_ value: Int) -> Color {
+        switch value {
+        case 0: return Color.gray.opacity(0.3)
+        case 2: return .white
+        case 4: return .green
+        case 8: return .pink
+        case 16: return .orange
+        case 32: return .yellow
+        case 64: return .purple
+        case 128: return .red
+        case 256: return Color(red: 0, green: 0.5, blue: 0)
+        case 512: return .cyan
+        case 1024: return .purple
+        case 2048: return Color(red: 0.6, green: 0.4, blue: 0.2)
+        case 4096: return .pink
+        case 8192: return .black
+        default: return .orange
+        }
+    }
+    
+    func saveBoardToStorage() {
+        savedBoardString = board.map { String($0) }.joined(separator: ",")
+    }
+    
+    func loadBoardFromStorage() {
+        let components = savedBoardString.split(separator: ",")
+        if components.count == 16 {
+            board = components.compactMap { Int($0) }
+            currentScore = board.reduce(0, +)
+        }
+    }
+    
+    func startNewGame(target: Int, endless: Bool = false) {
+        clearGameFlags()
+        resetBoard()
+        activeTarget = target
+        isEndless = endless
+        hasActiveGame = true
+        saveBoardToStorage()
+        
+        selectScreen = false
+        if endless {
+            endlessMode = true
+        } else {
+            showTargetScreen(target)
+        }
+    }
+    
+    func saveAndGoToMenu() {
+        saveBoardToStorage()
+        selectScreen = true
+        hideAllGameScreens()
+    }
+    
+    func resumeGame() {
+        loadBoardFromStorage()
+        selectScreen = false
+        menu = false
+        if isEndless {
+            endlessMode = true
+        } else {
+            showTargetScreen(activeTarget)
+        }
+    }
+    
+    func showTargetScreen(_ target: Int) {
+        oneTwentyEight = (target == 128)
+        twoFiftySix = (target == 256)
+        fiveTwelve = (target == 512)
+        tenTwentyFour = (target == 1024)
+        twentyFortyEight = (target == 2048)
+        fortyNinetySix = (target == 4096)
+        eightyOneNinetyTwo = (target == 8192)
+    }
+    
+    func hideAllGameScreens() {
+        oneTwentyEight = false
+        twoFiftySix = false
+        fiveTwelve = false
+        tenTwentyFour = false
+        twentyFortyEight = false
+        fortyNinetySix = false
+        eightyOneNinetyTwo = false
+        endlessMode = false
+    }
+    
+    func resetBoard() {
+        board = Array(repeating: 0, count: 16)
+        spawnNewTile()
+        spawnNewTile()
+        winScreen = false
+        loseScreen = false
+    }
+    
+    func handleSwipe(translation: CGSize) {
+        let oldBoard = board
+        let h = translation.width
+        let v = translation.height
+        
+        if abs(h) > abs(v) {
+            h > 0 ? moveRight() : moveLeft()
+        } else {
+            // Negative 'v' means swiping towards the top of the screen (Up)
+            // Positive 'v' means swiping towards the bottom of the screen (Down)
+            v < 0 ? moveUp() : moveDown()
+        }
+        
+        if board != oldBoard {
+            spawnNewTile()
+            checkGameState()
+        }
+    }
+    
+    func checkGameState() {
+        if !isEndless && board.contains(activeTarget) {
+            winScreen = true
+            clearGameFlags()
+            return
+        }
+        
+        if !board.contains(0) {
+            if !canMove() {
+                loseScreen = true
+                clearGameFlags()
+            }
+        }
+    }
+    
+    func clearGameFlags() {
+        hideAllGameScreens()
+        hasActiveGame = false
+    }
+    
+    func canMove() -> Bool {
+        for row in 0..<4 {
+            for col in 0..<4 {
+                let current = board[row * 4 + col]
+                if col < 3 && current == board[row * 4 + col + 1] { return true }
+                if row < 3 && current == board[(row + 1) * 4 + col] { return true }
+            }
+        }
+        return false
+    }
+    
+    func moveLeft() {
+        for row in 0..<4 {
+            let rowIndices = [row*4, row*4+1, row*4+2, row*4+3]
+            let line = rowIndices.map { board[$0] }
+            let newLine = slideAndMerge(line)
+            for (index, cellIndex) in rowIndices.enumerated() {
+                board[cellIndex] = newLine[index]
+            }
+        }
+    }
+    
+    func moveRight() {
+        for row in 0..<4 {
+            let rowIndices = [row*4+3, row*4+2, row*4+1, row*4]
+            let line = rowIndices.map { board[$0] }
+            let newLine = slideAndMerge(line)
+            for (index, cellIndex) in rowIndices.enumerated() {
+                board[cellIndex] = newLine[index]
+            }
+        }
+    }
+    
+    func moveUp() {
+        for col in 0..<4 {
+            let colIndices = [col, col+4, col+8, col+12]
+            let line = colIndices.map { board[$0] }
+            let newLine = slideAndMerge(line)
+            for (index, cellIndex) in colIndices.enumerated() {
+                board[cellIndex] = newLine[index]
+            }
+        }
+    }
+    
+    func moveDown() {
+        for col in 0..<4 {
+            let colIndices = [col+12, col+8, col+4, col]
+            let line = colIndices.map { board[$0] }
+            let newLine = slideAndMerge(line)
+            for (index, cellIndex) in colIndices.enumerated() {
+                board[cellIndex] = newLine[index]
+            }
+        }
+    }
+    
+    func slideAndMerge(_ line: [Int]) -> [Int] {
+        var items = line.filter { $0 != 0 }
+        var result: [Int] = []
+        var skip = false
+        for i in 0..<items.count {
+            if skip {
+                skip = false
+                continue
+            }
+            if i < items.count - 1 && items[i] == items[i+1] {
+                result.append(items[i] * 2)
+                skip = true
+            } else {
+                result.append(items[i])
+            }
+        }
+        while result.count < 4 {
+            result.append(0)
+        }
+        return result
+    }
+    
+    func spawnNewTile() {
+        let emptyIndexes = board.indices.filter { board[$0] == 0 }
+        if let randomTile = emptyIndexes.randomElement() {
+            board[randomTile] = Double.random(in: 0..<1) < 0.9 ? 2 : 4
+        }
+    }
+}
